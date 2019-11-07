@@ -94,18 +94,26 @@ def split_bybox(imgfile, outdir, imgtype = 'png', boxs = None, reference_imgfile
         cv2.imwrite(outfile, loc_box[1])
         spit(boxloc_file, '{}\t{}\n'.format(outfile, str(loc_box[0])))
         
-def parse_chars(filename, outfile = './{}.png', max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_factor = 5):
-    img_arr = cv2.imread(filename,0)
+def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_factor = 5):
 
     _,img_arr = cv2.threshold(img_arr,127,255,cv2.THRESH_BINARY)
+
     contours = cv2.findContours(img_arr, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0]
-    
     contours.sort(key=lambda x: cv2.boundingRect(x)[0])
+
     for i,cont in enumerate(contours):
-            x,y,w,h = cv2.boundingRect(cont)
-            if((w < max_w and w > min_w) and (h < max_h and h > min_h)):
-                filename = outfile.format(str(i).zfill(3))
-                box = cv2.resize(img_arr[y:y+h,x:x+w], (w*upscale_factor,h*upscale_factor),
-                                 interpolation=cv2.INTER_AREA)
-                cv2.imwrite(filename, box)        
- 
+        x,y,w,h = cv2.boundingRect(cont)
+        if((w < max_w and w > min_w) and (h < max_h and h > min_h)):
+            yield ((x,y,w,h), cv2.resize(img_arr[y:y+h,x:x+w], (w*upscale_factor,h*upscale_factor),
+                                         interpolation=cv2.INTER_AREA))
+
+
+def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10):
+    b = img_arr.copy()
+    b[::] = 255
+
+    char_itr = split_chars(img_arr, max_h=max_h, max_w=max_w, min_h=min_h, min_w=min_w, upscale_factor=1)
+    for box, char_arr in char_itr:
+        x,y,w,h = box
+        b[y:y+h,x:x+w] = img_arr[y:y+h,x:x+w]
+    return b
