@@ -6,6 +6,7 @@ import os
 # Package
 import __init__
 from dust.src.utils.io import spit, slurp
+from dust.src.extract.images import homography as __homography__
 
 # Additional Packages
 import numpy as np
@@ -39,61 +40,9 @@ def seek_boxes(img_arr, iterations=3, alpha=0.5):
 def parse_boxes(img_arr, boxes):
     '''generator of tuples of box location and image data within the box borders'''
     for box in boxes:
-        #x,y,w,h = box
-        x = box[0]
-        y = box[1]
-        w = box[2]
-        h = box[3]
+        x,y,w,h = box
         yield (box, img_arr[y:y+h, x:x+w])
 
-def __homography__(img_arr0, img_arr1):
-
-    g0 = cv2.cvtColor(img_arr0, cv2.COLOR_BGR2GRAY)
-    g1 = cv2.cvtColor(img_arr1, cv2.COLOR_BGR2GRAY)
-
-    orb = cv2.ORB_create(__homography__.maxf)
-    k0, d0 = orb.detectAndCompute(g0, None)
-    k1, d1 = orb.detectAndCompute(g1, None)
-
-    matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
-    matches = sorted(matcher.match(d0, d1, None), key=lambda x: x.distance, reverse=False)
-    matches = matches[0:int(len(matches)*__homography__.matchp)]
-
-    p0 = np.zeros((len(matches), 2), dtype=np.float32)
-    p1 = np.zeros((len(matches), 2), dtype=np.float32)
-
-    for i, match in enumerate(matches):
-        p0[i,:] = k0[match.queryIdx].pt
-        p1[i,:] = k1[match.trainIdx].pt
-
-    h, mask = cv2.findHomography(p0, p1, cv2.RANSAC)
-
-    height, width, channels = img_arr1.shape
-    adj_arr = cv2.warpPerspective(img_arr0, h, (width, height))
-
-    return adj_arr, h
-__homography__.maxf = 150000
-__homography__.matchp = 0.03
-
-def split_bybox(imgfile, outdir, imgtype = 'png', boxs = None, reference_imgfile = None):
-    '''Split an image file by identified box locations'''
-
-    if(reference_imgfile):
-        #align imgfile to reference image if give to ensure any pre-defined boxes align as expected
-        ref_img = cv2.imread(reference_imgfile, cv2.IMREAD_COLOR)
-        img_arr = cv2.imread(imgfile, cv2.IMREAD_COLOR)
-        img_arr = cv2.cvtColor(__homography__(img_arr, ref_img)[0], cv2.COLOR_BGR2GRAY)
-    else:
-        img_arr = cv2.imread(imgfile,0)
-    
-    locs_boxs = parse_boxes(img_arr, boxs or seek_boxes(img_arr))
-
-    boxloc_file = os.path.join(outdir,'box_legend.txt')
-    for i,loc_box in enumerate(locs_boxs):
-        outfile = os.path.join(outdir,'{}.{ft}'.format(i,ft=imgtype))
-        cv2.imwrite(outfile, loc_box[1])
-        spit(boxloc_file, '{}\t{}\n'.format(outfile, str(loc_box[0])))
-        
 def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_factor = 5):
 
     _,img_arr = cv2.threshold(img_arr,127,255,cv2.THRESH_BINARY)
@@ -108,7 +57,7 @@ def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_
                                          interpolation=cv2.INTER_AREA))
 
 
-def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10):
+def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 1, min_w = 1):
     b = img_arr.copy()
     b[::] = 255
 
@@ -117,3 +66,27 @@ def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10)
         x,y,w,h = box
         b[y:y+h,x:x+w] = img_arr[y:y+h,x:x+w]
     return b
+
+def split_bybox(imgfile, outdir, imgtype = 'png', boxs = None, reference_imgfile = None, noisefilter_fn = remove_nonchar_noise):
+    '''Split an image file by identified box locations'''
+
+    if(reference_imgfile):
+        #align imgfile to reference image if give to ensure any pre-defined boxes align as expected
+        ref_img = cv2.imread(reference_imgfile, cv2.IMREAD_COLOR)
+
+        img_arr = cv2.imread(imgfile, cv2.IMREAD_COLOR)
+        img_arr = cv2.cvtColor(__homography__(img_arr, ref_img)[0], cv2.COLOR_BGR2GRAY)
+    else:
+        img_arr = cv2.imread(imgfile,0)
+    
+    locs_boxs = parse_boxes(img_arr, boxs or seek_boxes(img_arr))
+
+    boxloc_file = os.path.join(outdir,'box_legend.txt')
+    for i,loc_box in enumerate(locs_boxs):
+        outfile = os.path.join(outdir,'{}.{ft}'.format(i,ft=imgtype))
+       
+        cv2.imwrite(outfile, noisefilter_fn(loc_box[1]))
+        spit(boxloc_file, '{}\t{}\n'.format(outfile, str(loc_box[0])))
+
+
+

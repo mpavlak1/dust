@@ -10,6 +10,8 @@ from dust.src.utils.filepaths import as_filetype
 
 # Additional Packages
 from PIL import Image
+import numpy as np
+import cv2
 
 def monochrome(imgfile, threshold = 150, outfile = None):
     """Convert all pixels in image to either Black or White based on threshold value"""
@@ -25,72 +27,49 @@ def monochrome(imgfile, threshold = 150, outfile = None):
 def convert(imgfile, filetype, outfile=None):
     """Convert imagefile to different image file type"""
     Image.open(imgfile).save(as_filetype(outfile or imgfile, filetype))
-   
+
+def homography(img_arr0, img_arr1):
+    ##img_arr0 is the image to be adjusted, img_arr1 is the reference
+    g0 = cv2.cvtColor(img_arr0, cv2.COLOR_BGR2GRAY)
+    g1 = cv2.cvtColor(img_arr1, cv2.COLOR_BGR2GRAY)
+
+    orb = cv2.ORB_create(homography.maxf)
+    k0, d0 = orb.detectAndCompute(g0, None)
+    k1, d1 = orb.detectAndCompute(g1, None)
+
+    matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
+    matches = sorted(matcher.match(d0, d1, None), key=lambda x: x.distance, reverse=False)
+    matches = matches[0:int(len(matches)*homography.matchp)]
+
+    p0 = np.zeros((len(matches), 2), dtype=np.float32)
+    p1 = np.zeros((len(matches), 2), dtype=np.float32)
+
+    for i, match in enumerate(matches):
+        p0[i,:] = k0[match.queryIdx].pt
+        p1[i,:] = k1[match.trainIdx].pt
+
+    h, mask = cv2.findHomography(p0, p1, cv2.RANSAC)
+
+    height, width, channels = img_arr1.shape
+    adj_arr = cv2.warpPerspective(img_arr0, h, (width, height))
+
+    return adj_arr, h
+homography.maxf = 150000
+homography.matchp = 0.05
 
 
-f0 = 'C:/Users/michael.pavlak/Desktop/irs_sampleform_img-dump/irs_sampleform-001.png'
-f00 = Image.open(f0)
+def image_similarity(img_arr0, img_arr1, method = cv2.TM_CCOEFF_NORMED, adjust_image = True):
+    '''Return the percent simialrity between img0 and img1'''
+    if(adjust_image):
+        img_arr0 = homography(img_arr0, img_arr1)[0]
 
-##from PIL import Image
-##import numpy as np
-##
-##w, h = 512, 512
-##data = np.zeros((h, w, 3), dtype=np.uint8)
-##data[256, 256] = [255, 0, 0]
-##img = Image.fromarray(data, 'RGB')
-##img.save('my.png')
-##img.show()
+    img_arr0 = cv2.cvtColor(img_arr0,cv2.COLOR_BGR2GRAY)
+    img_arr1 = cv2.cvtColor(img_arr1,cv2.COLOR_BGR2GRAY)
+
+    res = cv2.matchTemplate(img_arr0, img_arr1, method)
+    return cv2.minMaxLoc(res)[1]
 
 
-def img_subsec(imgArr, outfile, format_='RGB'):
-    imgObj = Image.fromarray(imgArr, format_)
-    imgObj.save(outfile)
-    #imgObj.show()
-
-import numpy as np
-def subArr(arr0, n, m, start_y=0, start_x=0):
-    data = np.zeros((n, m, 3), dtype=np.uint8)
-
-    for y in range(n):
-        for x in range(m):
-            p = arr0[x+start_x,y+start_y]
-            data[y,x,0] = p[0]
-            data[y,x,1] = p[1]
-            data[y,x,2] = p[2]
-    return data
-
-def itr_img(imgObj):
-    xmax = imgObj.width
-    ymax = imgObj.height
-
-    px = imgObj.load()
-    for x in range(xmax):
-        for y in range(ymax):
-            yield [x,y, px[x,y]]
 
 
-def seek_img(imgItr, dry_thresh = 20):
 
-    p0 = None
-    dry = 0
-
-    for cord in imgItr:
-        if(cord[2] == (255,255,255)):
-            continue
-        else:
-            p0 = cord
-            break
-
-    for cord in imgItr:
-        if(dry >= dry_thresh): break
-        if(cord[2] == (255,255,255)):
-            dry+=1
-            continue
-    return [p0, cord]
-        
-
-
-def qqq():
-    m = subArr(f00.load(), 105, 10, start_y=1664, start_x=98)
-    img_subsec(m, 'C:/Users/michael.pavlak/Desktop/out.png')
-    
