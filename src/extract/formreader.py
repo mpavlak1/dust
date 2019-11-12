@@ -10,6 +10,7 @@ from dust.src.utils.filepaths import rem_filetype, as_filetype
 from dust.src.extract.boxparse import split_bybox, remove_nonchar_noise
 from dust.src.extract.tesseract import tesseractOCRsingle
 from dust.src.extract.ghostscript import pdf_toimgs
+from dust.src.extract.images import image_similarity, __imgarr__
 
 def __read_formatfile__(filename, delim='\t', reformat=True):
     x = dict(map(lambda x: [x[0], eval(x[1])],
@@ -29,11 +30,45 @@ class FormExtractor():
         self.templatefile = templatefile
         self.filename = filename
         self.__simthresh__ = threshold
-        self.__dumpdir__ = os.path.join(rem_filetype(self.filename), '_img-dump')
+        self.__dumpdir__ = '{}{}'.format(rem_filetype(self.filename), '_img-dump')
+        self.__imgfiles__ = []
+        
 
     def __enter__(self):
-        pdf_toimgs(self.filename)
+        pdf_toimgs(self.filename, img_format='jpeg')
+        for file in os.listdir(self.__dumpdir__):
+            self.__imgfiles__.append(os.path.join(self.__dumpdir__, file))
         return self
+
+    def __lazysearch__(self, thresh=0.70):
+        #Return the first image that is atleast as similar as threshold
+        
+        template_arr = __imgarr__(self.templatefile)
+        for file in self.__imgfiles__:
+            img_arr = __imgarr__(file)
+            _rate = image_similarity(img_arr, template_arr)
+            if(_rate > thresh):
+                return file
+        raise StopIteration
+
+    def __bestsearch__(self):
+        #Score similarity of all images and return highest match
+
+        match_rates = {}
+        template_arr = __imgarr__(self.templatefile)
+        for file in self.__imgfiles__:
+            img_arr = __imgarr__(file)
+            match_rates[file] = image_similarity(img_arr, template_arr)
+        return max(match_rates, key = lambda x: match_rates[x])
+
+    def match(self, mode='lazy', thresh=0.70):
+        #From the converted list of files, find the images most similar to the tempate
+        assert mode in self.match.modes, 'Invalid search mode ({}). Valid mode choices: {}'.format(mode,__search__.modes)
+        return self.match.modes[mode].__call__(self) if 'best' else self.match.modes[mode].__call__(self, thresh=thresh)
+    match.modes = {'lazy':__lazysearch__, 'best':__bestsearch__}
+
+    def __exit__(self, *args):
+        pass
 
 
 class FormReader():
@@ -44,7 +79,7 @@ class FormReader():
         self.data = {}
 
         self.__boxmap__ = boxmap
-        self.__extract_path__ = extract_path
+        self.__extract_path__ = extract_path or '{}{}'.format(rem_filetype(self.filename), '_img-dump')
         self.__formextract_files__ = {}
         self.__noisefilter_fn__ = noisefilter_fn or remove_nonchar_noise
         
@@ -76,6 +111,11 @@ class FormReader():
             self.data[key] = self.__parse_var__(self.__formextract_files__[key])
 
     def __enter__(self):
+
+        if(self.filename[-4:] == '.pdf'):
+            with FormExtractor(self.templatefile, self.filename) as fe:
+                self.filename = fe.match()
+        
         self.__splitfields__()
         self.__ocrimgs__()
         return self
@@ -94,6 +134,10 @@ class FormReader():
             except FileNotFoundError: pass
         os.rmdir(self.__extract_path__)
 
-
+templatefile = 'C:/Users/michael.pavlak/Desktop/dust/test/test_files/w2_forms/w2_reference_2019.png'
+t0 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019.pdf'
+f0 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019_img-dump/w2_pdf_2019-001.jpeg'
+f1 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019_img-dump/w2_pdf_2019-002.jpeg'
+boxs = __read_formatfile__('C:/Users/michael.pavlak/Desktop/dust/test/test_files/w2_forms/w2_format.txt')
 
 

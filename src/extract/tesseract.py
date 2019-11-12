@@ -9,13 +9,7 @@ import subprocess
 import __init__
 from dust.src.utils.lang import default_opts, switch_statement
 from dust.src.utils.spawn import call_nowindow
-from dust.src.extract.images import monochrome
 from dust.src.utils.io import spit
-
-
-def preprocess_img(imgfile):
-    return monochrome(imgfile)
-
 
 def tesseractOCRsingle(imgfile, outfile, **opts):
     default_opts(opts, dict(tesseractOCRsingle.defaultopts))
