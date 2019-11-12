@@ -133,11 +133,3 @@ class FormReader():
             try: os.remove(os.path.join(self.__extract_path__, file))
             except FileNotFoundError: pass
         os.rmdir(self.__extract_path__)
-
-templatefile = 'C:/Users/michael.pavlak/Desktop/dust/test/test_files/w2_forms/w2_reference_2019.png'
-t0 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019.pdf'
-f0 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019_img-dump/w2_pdf_2019-001.jpeg'
-f1 = 'C:/Users/michael.pavlak/Desktop/w2_pdf_2019_img-dump/w2_pdf_2019-002.jpeg'
-boxs = __read_formatfile__('C:/Users/michael.pavlak/Desktop/dust/test/test_files/w2_forms/w2_format.txt')
-
-
