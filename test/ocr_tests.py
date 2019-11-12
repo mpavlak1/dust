@@ -11,7 +11,6 @@ import unittest
 import __init__
 from dust.src.extract.boxparse import split_bybox, remove_nonchar_noise
 from dust.src.extract.formreader import __read_formatfile__, FormReader
-from dust.src.extract.images import monochrome
 from dust.src.extract.tesseract import tesseractOCRsingle
 from dust.src.extract.ghostscript import pdf_toimgs
 from dust.src.utils.io import slurp
@@ -29,15 +28,14 @@ class TestW2Extract(unittest.TestCase):
 
         self.ref2019 = os.path.join(self.w2dir, 'w2_reference_2019.png')
         self.sam2019 = os.path.join(self.w2dir, 'w2_sample_2019.png')
-        self.sam2017 = os.path.join(self.w2dir, 'w2_sample_2017.png')
+        #self.sam2017 = os.path.join(self.w2dir, 'w2_sample_2017.png')
 
         self.dump = os.path.join(self.w2dir,'dump')
         os.makedirs(self.dump, exist_ok=True)
 
         self.clean_dumpdir()
-
-        self.w2_einbox = (646, 192, 526, 52)
-        self.sampfiles = [self.sam2019, self.sam2017]
+        self.w2_einbox = (640, 196, 452, 52)
+        self.sampfiles = [self.sam2019]#, self.sam2017]
 
     def clean_dumpdir(self):
         for file in os.listdir(self.dump):
@@ -56,7 +54,7 @@ class TestW2Extract(unittest.TestCase):
 
             assert os.path.exists(imgfile)
             img_arr = cv2.imread(imgfile,0)
-            img_arr = remove_nonchar_noise(img_arr)
+            #img_arr = remove_nonchar_noise(img_arr)
             
             cv2.imwrite(imgfile, img_arr)
             text_out = os.path.join(self.dump, 'text')
@@ -64,7 +62,6 @@ class TestW2Extract(unittest.TestCase):
             text_out+='.txt'
 
             assert os.path.exists(text_out)
-
             text = slurp(text_out)[0].strip()
         
             assert text.replace('-',' ') == '123 45 6789', \
@@ -118,8 +115,9 @@ class TestW2FormReader(unittest.TestCase):
             os.remove(os.path.join(self.dump, file))
 
 unittest.main()
+
 ##suite = unittest.TestSuite()
-##suite.addTest(TestW2FormReader("test_one"))
+##suite.addTest(TestW2FormReader("test_readform"))
 ##runner = unittest.TextTestRunner()
 ##runner.run(suite)
 
