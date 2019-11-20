@@ -7,79 +7,16 @@ import __init__
 import numpy as np
 from scipy.special import expit
 
-def sigmoid(s):
-    return expit(s)
-    return 1/(1+np.exp(-s))
-
+def sigmoid(s): return expit(s)
 def sigmoid_prime(s): return s*(1-s)
 
-class twoLayerNeuralNetwork():
 
-    def __init__(self, inputlayers, outputlayers, hiddenlayers0 = 10, hiddenlayers1 = 10,
-                 activation_fn = sigmoid, activationprime_fn = sigmoid_prime, learning_rate=0.01):
+class nLayerNeuralNetwork():
 
-        self.inputlayers = inputlayers
-        self.outputlayers = outputlayers
-        self.hiddenlayers0 = hiddenlayers0
-        self.hiddenlayers1 = hiddenlayers1
-
-        self.activation_fn = activation_fn
-        self.activationprime_fn = activationprime_fn
-        self.learning_rate = learning_rate
-
-        self.weight_ih0  = np.random.randn(self.inputlayers ,  self.hiddenlayers0)
-        self.weight_h0h1 = np.random.randn(self.hiddenlayers0, self.hiddenlayers1)
-        self.weight_h1o  = np.random.randn(self.hiddenlayers1, self.outputlayers)
-
-    def forward_prop(self, X):
-
-        self.h0active = self.activation_fn(np.dot(X, self.weight_ih0))
-        self.h1active = self.activation_fn(np.dot(self.h0active, self.weight_h0h1))
-        output = self.activation_fn(np.dot(self.h1active, self.weight_h1o))
-        return output
-
-    def backward_prop(self, X, output, expected_output):
-
-        self.output_error = expected_output - output
-        self.output_delta = self.output_error * self.activationprime_fn(output)
-
-        self.hidden1_error = self.output_error.dot(self.weight_h1o.T)
-        self.hidden1_delta = self.hidden1_error * self.activationprime_fn(self.h1active)
-
-        self.hidden0_error = self.hidden1_error.dot(self.weight_h0h1.T)
-        self.hidden0_delta = self.hidden0_error * self.activationprime_fn(self.h0active)
-
-        self.weight_ih0  += self.learning_rate * X.T.dot(self.hidden0_delta)
-        self.weight_h0h1 += self.learning_rate *self.h0active.T.dot(self.hidden1_delta)
-        self.weight_h1o  += self.learning_rate *self.h1active.T.dot(self.output_delta)
-
-    def train(self, X, expected_outputs, N=1, prune_rate = 0.00001):
-        for _ in range(N):
-            try:
-                p_error = sum(self.output_error)
-            except AttributeError:
-                p_error = np.zeros(self.outputlayers)
-
-            output = self.forward_prop(X)
-            self.backward_prop(X, output, expected_outputs)
-
-            c_error = sum(self.output_error)
-
-            ientropy = sum(abs(p_error - c_error))
-            if(_ < 10):
-                continue
-            if(ientropy < prune_rate):
-                print('Entropy = {}'.format(ientropy))
-                print('No new info gained; pruning at {}'.format(_))
-                break
+    def __init__(self, inputlayers, outputlayers, hiddenlayers=(7,7,7),
+                 activation_fn = sigmoid, activationprime_fn = sigmoid_prime,
+                 trainX = None, trainY = None, epochs=1000):
         
-
-
-class SimpleNeuralNetwork():
-
-    def __init__(self, inputlayers, outputlayers, hiddenlayers=10,
-                 activation_fn = sigmoid, activationprime_fn = sigmoid_prime, learning_rate=0.01):
-
         self.inputlayers = inputlayers
         self.outputlayers = outputlayers
         self.hiddenlayers = hiddenlayers
@@ -87,39 +24,101 @@ class SimpleNeuralNetwork():
         self.activation_fn = activation_fn
         self.activationprime_fn = activationprime_fn
 
-        self.weight_ih = np.random.randn(self.inputlayers, self.hiddenlayers)
-        self.weight_ho = np.random.randn(self.hiddenlayers, self.outputlayers)
+        weight_ih0 = np.random.randn(self.inputlayers, self.hiddenlayers[0])
+        hidden_weights = [np.random.randn(self.hiddenlayers[i], self.hiddenlayers[i+1]) \
+                               for i in range(len(self.hiddenlayers[0:-1]))]
+        weight_hNo = np.random.randn(self.hiddenlayers[-1], self.outputlayers)
+
+        self.weights = [weight_ih0, *hidden_weights, weight_hNo]
+
+        if(trainX is not None and trainY is not None):
+            self.train(trainX, trainY, N=epochs)
 
     def forward_prop(self, X):
-        self.hactive = self.activation_fn(np.dot(X, self.weight_ih))
-        output = self.activation_fn(np.dot(self.hactive, self.weight_ho))
-        return output
+        activations = []
+        p = X
+        for i in range(len(self.weights)):
+            p = self.activation_fn(np.dot(p, self.weights[i]))
+            activations.append(p)
+        self.activations = activations
+        return activations[-1]
 
     def backward_prop(self, X, output, expected_output):
 
-        self.output_error = expected_output - output
-        self.output_delta = self.output_error * self.activationprime_fn(output)
+        errors, deltas = [], []
 
-        self.hidden_error = self.output_error.dot(self.weight_ho.T)
-        self.hidden_delta = self.hidden_error*self.activationprime_fn(self.hactive)
+        errors.append(expected_output - output)
+        deltas.append(errors[-1] * self.activationprime_fn(output))
+        
+        for i in range(len(self.weights)-1, 0, -1):
+            e = errors[-1].dot(self.weights[i].T)
+            d = e*self.activationprime_fn(self.activations[i-1])
 
-        self.weight_ih += X.T.dot(self.hidden_delta)
-        self.weight_ho += self.hactive.T.dot(self.output_delta)
+            errors.append(e)
+            deltas.append(d)
 
-    def train(self, X, expected_outputs, N=1, prune_rate = 0.00001):
+        errors.reverse()
+        deltas.reverse()
+
+        a = [X] + self.activations
+        for i in range(len(self.weights)):
+            self.weights[i] += a[i].T.dot(deltas[i])
+
+        self.errors = errors
+        self.deltas = deltas
+
+    def train(self, X, expected_outputs, N=1, prune_rate = 1/10000):
         for _ in range(N):
             try:
-                p_error = sum(self.output_error)
-            except AttributeError:
-                p_error = np.zeros(self.outputlayers)
+                p_error = sum(self.errors[-1])
+            except AttributeError: p_error = np.zeros(self.outputlayers)
+
             output = self.forward_prop(X)
             self.backward_prop(X, output, expected_outputs)
 
-            c_error = sum(self.output_error)
+            c_error = sum(self.errors[-1])
 
             ientropy = sum(abs(p_error - c_error))
-            if(ientropy < prune_rate and _ > 10):
+            if(ientropy < prune_rate):
                 print('Entropy = {}'.format(ientropy))
                 print('No new info gained; pruning at {}'.format(_))
                 break
 
+        
+     
+
+x0 = np.array([0,0,0,1,1,1]) #class A
+x1 = np.array([0,0,0,0,1,1]) #class A
+x2 = np.array([0,0,0,1,1,0]) #class A
+x3 = np.array([0,0,0,1,0,1]) #class A
+x4 = np.array([1,1,1,0,0,0]) #class B
+x5 = np.array([1,1,0,0,0,0]) #class B
+x6 = np.array([0,1,1,0,0,0]) #class B
+x7 = np.array([1,0,1,0,0,0]) #class B
+x8 = np.array([1,0,0,0,0,1]) #class C
+x9 = np.array([1,1,0,0,0,1]) #class C
+xa = np.array([1,0,0,0,1,1]) #class C
+xb = np.array([1,1,0,0,1,1]) #class C
+
+X0 = np.array([x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb])
+
+y0 = np.array([1,0,0]) #A
+y1 = np.array([1,0,0]) #A
+y2 = np.array([1,0,0]) #A
+y3 = np.array([1,0,0]) #A
+y4 = np.array([0,1,0]) #B
+y5 = np.array([0,1,0]) #B
+y6 = np.array([0,1,0]) #B
+y7 = np.array([0,1,0]) #B
+y8 = np.array([0,0,1]) #C
+y9 = np.array([0,0,1]) #C
+ya = np.array([0,0,1]) #C
+yb = np.array([0,0,1]) #C
+
+Y0 = np.array([y0,y1,y2,y3,y4,y5,y6,y7,y8,y9,ya,yb])
+
+X = X0
+Y = Y0
+
+nn=nLayerNeuralNetwork(6, 3, [7,9], trainX=X, trainY=Y)  
+from dust.src.structs.metrics import accuracy
