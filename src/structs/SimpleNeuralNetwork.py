@@ -1,5 +1,10 @@
 # /dust/src/structs/SimpleNeuralNetwork.py
 
+# Built-ins
+import os
+import pickle
+import zipfile
+
 # Package
 import __init__
 
@@ -10,11 +15,11 @@ from scipy.special import expit
 def sigmoid(s): return expit(s)
 def sigmoid_prime(s): return s*(1-s)
 
-
 class nLayerNeuralNetwork():
 
     def __init__(self, inputlayers, outputlayers, hiddenlayers=(7,7,7),
                  activation_fn = sigmoid, activationprime_fn = sigmoid_prime,
+                 learning_rate = 0.01,
                  trainX = None, trainY = None, epochs=1000):
         
         self.inputlayers = inputlayers
@@ -23,6 +28,7 @@ class nLayerNeuralNetwork():
 
         self.activation_fn = activation_fn
         self.activationprime_fn = activationprime_fn
+        self.learning_rate = learning_rate
 
         weight_ih0 = np.random.randn(self.inputlayers, self.hiddenlayers[0])
         hidden_weights = [np.random.randn(self.hiddenlayers[i], self.hiddenlayers[i+1]) \
@@ -62,7 +68,7 @@ class nLayerNeuralNetwork():
 
         a = [X] + self.activations
         for i in range(len(self.weights)):
-            self.weights[i] += a[i].T.dot(deltas[i])
+            self.weights[i] += self.learning_rate * a[i].T.dot(deltas[i])
 
         self.errors = errors
         self.deltas = deltas
@@ -84,41 +90,80 @@ class nLayerNeuralNetwork():
                 print('No new info gained; pruning at {}'.format(_))
                 break
 
-        
-     
+def save(model, path):
 
-x0 = np.array([0,0,0,1,1,1]) #class A
-x1 = np.array([0,0,0,0,1,1]) #class A
-x2 = np.array([0,0,0,1,1,0]) #class A
-x3 = np.array([0,0,0,1,0,1]) #class A
-x4 = np.array([1,1,1,0,0,0]) #class B
-x5 = np.array([1,1,0,0,0,0]) #class B
-x6 = np.array([0,1,1,0,0,0]) #class B
-x7 = np.array([1,0,1,0,0,0]) #class B
-x8 = np.array([1,0,0,0,0,1]) #class C
-x9 = np.array([1,1,0,0,0,1]) #class C
-xa = np.array([1,0,0,0,1,1]) #class C
-xb = np.array([1,1,0,0,1,1]) #class C
+    os.makedirs(path, exist_ok=True)
+    for file in os.listdir(path):
+        try:
+            os.remove(os.path.join(path, file))
+        except Exception as e:
+            print(e)
+            continue
+    
+    def _savenp(arrs, type_):
+        for i, arr in enumerate(arrs):
+            outfile = os.path.join(path,'{}_{}.pickle'.format(type_,i))
+            with open(outfile, 'wb') as f: np.save(f, arr)
 
-X0 = np.array([x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,xa,xb])
+    _savenp(model.activations, 'activation')
+    _savenp(model.weights,     'weight')
+    _savenp(model.deltas,      'delta')
+    _savenp(model.errors,      'error')
 
-y0 = np.array([1,0,0]) #A
-y1 = np.array([1,0,0]) #A
-y2 = np.array([1,0,0]) #A
-y3 = np.array([1,0,0]) #A
-y4 = np.array([0,1,0]) #B
-y5 = np.array([0,1,0]) #B
-y6 = np.array([0,1,0]) #B
-y7 = np.array([0,1,0]) #B
-y8 = np.array([0,0,1]) #C
-y9 = np.array([0,0,1]) #C
-ya = np.array([0,0,1]) #C
-yb = np.array([0,0,1]) #C
+    main_copy = nLayerNeuralNetwork(model.inputlayers, model.outputlayers,
+                                    hiddenlayers = model.hiddenlayers,
+                                    activation_fn = model.activation_fn,
+                                    activationprime_fn = model.activationprime_fn,
+                                    learning_rate = model.learning_rate)
+    main_copy.weights = []
+    with open(os.path.join(path,'main.pickle'), 'wb') as f:
+        pickle.dump(main_copy, f)
 
-Y0 = np.array([y0,y1,y2,y3,y4,y5,y6,y7,y8,y9,ya,yb])
+    z = zipfile.ZipFile('{}.model'.format(path),mode='w')
+    for file in os.listdir(path):
+        z.write(os.path.join(path,file), arcname=os.path.basename(file))
+    z.close()
 
-X = X0
-Y = Y0
+    for file in os.listdir(path):
+        try:
+            os.remove(os.path.join(path, file))
+        except Exception as e: print(e)
+    os.rmdir(path)
+    
+    
+def load(path):
 
-nn=nLayerNeuralNetwork(6, 3, [7,9], trainX=X, trainY=Y)  
-from dust.src.structs.metrics import accuracy
+    with zipfile.ZipFile(path) as z:
+        path = path.replace('.model','')
+        z.extractall(path)
+    
+    files = tuple(map(lambda x: os.path.join(path, x), os.listdir(path)))
+
+    def _loadnp(files, list_):
+        files = sorted(files, key=lambda x: \
+                       int(os.path.basename(x).split('_')[1].replace('.pickle','')))
+        for file in files:
+            with open(file, 'rb') as f:
+                list_.append(np.load(f))
+    
+    with open(os.path.join(path,'main.pickle'), 'rb') as f:
+        main = pickle.load(f)
+
+    main.activations = []
+    main.weights = []
+    main.deltas = []
+    main.errors = []
+
+    _loadnp(filter(lambda x: 'activation_' in x, files), main.activations)
+    _loadnp(filter(lambda x: 'weight_'     in x, files), main.weights)
+    _loadnp(filter(lambda x: 'deltas_'     in x, files), main.deltas)
+    _loadnp(filter(lambda x: 'errors_'     in x, files), main.errors)
+
+    for file in os.listdir(path):
+        try:
+            os.remove(os.path.join(path, file))
+        except Exception as e: print(e)
+    try: os.rmdir(path)
+    except Exception as e: print(e)
+    
+    return main        
