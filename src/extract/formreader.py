@@ -36,8 +36,10 @@ class FormExtractor():
 
     def __enter__(self):
         pdf_toimgs(self.filename, img_format='jpeg')
+        _basename = os.path.split(rem_filetype(self.filename))[1]
         for file in os.listdir(self.__dumpdir__):
-            self.__imgfiles__.append(os.path.join(self.__dumpdir__, file))
+            if(_basename in file):
+                self.__imgfiles__.append(os.path.join(self.__dumpdir__, file))
         return self
 
     def __lazysearch__(self, thresh=0.70):
@@ -90,6 +92,7 @@ class FormReader():
         box_legend = __read_formatfile__(os.path.join(self.__extract_path__, 'box_legend.txt'), reformat=False)
         for key in box_legend:
             self.__formextract_files__[tuple(box_legend[key])] = {'imgfile': key}
+
         for key in self.__boxmap__: 
             try:
                 self.__formextract_files__[tuple(self.__boxmap__[key])]['var'] = key
@@ -103,6 +106,7 @@ class FormReader():
                                           self.__formextract_files__.values()))
 
     def __parse_var__(self, imgfile):
+##        print(rem_filetype(imgfile))
         tesseractOCRsingle(imgfile, rem_filetype(imgfile), psm=11)
         return '\n'.join(slurp(as_filetype(imgfile, '.txt'))[:-1]).strip()
 
@@ -133,3 +137,4 @@ class FormReader():
             try: os.remove(os.path.join(self.__extract_path__, file))
             except FileNotFoundError: pass
         os.rmdir(self.__extract_path__)
+

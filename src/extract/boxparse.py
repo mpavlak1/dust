@@ -41,9 +41,10 @@ def parse_boxes(img_arr, boxes):
     '''generator of tuples of box location and image data within the box borders'''
     for box in boxes:
         x,y,w,h = box
+
         yield (box, img_arr[y:y+h, x:x+w])
 
-def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_factor = 5):
+def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_factor = 5, size=None):
 
     _,img_arr = cv2.threshold(img_arr,127,255,cv2.THRESH_BINARY)
 
@@ -57,7 +58,7 @@ def split_chars(img_arr, max_h = 40, max_w = 40, min_h = 4, min_w = 10, upscale_
                                          interpolation=cv2.INTER_AREA))
 
 
-def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 1, min_w = 1):
+def remove_nonchar_noise(img_arr, max_h = 50, max_w = 50, min_h = 1, min_w = 1):
     b = img_arr.copy()
     b[::] = 255
 
@@ -67,7 +68,7 @@ def remove_nonchar_noise(img_arr, max_h = 40, max_w = 40, min_h = 1, min_w = 1):
         b[y:y+h,x:x+w] = img_arr[y:y+h,x:x+w]
     return b
 
-def split_bybox(imgfile, outdir, imgtype = 'png', boxs = None, reference_imgfile = None, noisefilter_fn = remove_nonchar_noise):
+def split_bybox(imgfile, outdir, imgtype = 'jpeg', boxs = None, reference_imgfile = None, noisefilter_fn = remove_nonchar_noise):
     '''Split an image file by identified box locations'''
 
     if(reference_imgfile):
@@ -83,10 +84,18 @@ def split_bybox(imgfile, outdir, imgtype = 'png', boxs = None, reference_imgfile
 
     boxloc_file = os.path.join(outdir,'box_legend.txt')
     for i,loc_box in enumerate(locs_boxs):
+    
         outfile = os.path.join(outdir,'{}.{ft}'.format(i,ft=imgtype))
+        os.makedirs(os.path.dirname(outfile), exist_ok=True)
        
         cv2.imwrite(outfile, noisefilter_fn(loc_box[1]))
         spit(boxloc_file, '{}\t{}\n'.format(outfile, str(loc_box[0])))
+
+        try:
+            assert os.path.exists(outfile), '{} does not exist.'.format(outfile)
+        except Exception:
+            print(loc_box[1])
+            raise
 
 
 
