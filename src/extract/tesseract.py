@@ -13,7 +13,7 @@ from dust.src.utils.io import spit
 
 def tesseractOCRsingle(imgfile, outfile, **opts):
     default_opts(opts, dict(tesseractOCRsingle.defaultopts))
-
+    
     #Check if file exists and not overwrite
     args = switch_statement(opts, lambda opts: int(not opts['overwrite'] and os.path.exists(outfile)),
                             [lambda: [environ['tesseract'], imgfile, outfile,
@@ -21,7 +21,13 @@ def tesseractOCRsingle(imgfile, outfile, **opts):
                                       #,'-l', opts['language']],
                              lambda: []])                   
     #Spawn subprocess
-    return call_nowindow(args)
+    try:
+        return call_nowindow(args)
+    except Exception as e:
+        print(e)
+        print(args)
+        os.getcwd()
+
 tesseractOCRsingle.defaultopts = {'oem':1, 'psm':1, 'language':'eng', 'overwrite':False}
 
 ##def tesseractOCRbatch(imgdir, outfile, **opts):

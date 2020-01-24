@@ -5,12 +5,13 @@ import os
 
 # Package
 import __init__
-from dust.src.utils.io import slurp
-from dust.src.utils.filepaths import rem_filetype, as_filetype
-from dust.src.extract.boxparse import split_bybox, remove_nonchar_noise
-from dust.src.extract.tesseract import tesseractOCRsingle
+from dust.src.utils.io            import slurp
+from dust.src.utils.filepaths     import rem_filetype, as_filetype
+from dust.src.extract.images      import image_similarity, __imgarr__
+from dust.src.extract.boxparse    import split_bybox, remove_nonchar_noise
+from dust.src.extract.tesseract   import tesseractOCRsingle
 from dust.src.extract.ghostscript import pdf_toimgs
-from dust.src.extract.images import image_similarity, __imgarr__
+
 
 def __read_formatfile__(filename, delim='\t', reformat=True):
     x = dict(map(lambda x: [x[0], eval(x[1])],
@@ -26,16 +27,16 @@ def __read_formatfile__(filename, delim='\t', reformat=True):
 
 class FormExtractor():
 
-    def __init__(self, templatefile, filename, threshold=0.75):
+    def __init__(self, templatefile, filename, threshold=0.75, pages=None):
         self.templatefile = templatefile
         self.filename = filename
         self.__simthresh__ = threshold
         self.__dumpdir__ = '{}{}'.format(rem_filetype(self.filename), '_img-dump')
         self.__imgfiles__ = []
-        
+        self.__pages__ = pages        
 
     def __enter__(self):
-        pdf_toimgs(self.filename, img_format='jpeg')
+        pdf_toimgs(self.filename, img_format='jpeg', pages=self.__pages__)
         _basename = os.path.split(rem_filetype(self.filename))[1]
         for file in os.listdir(self.__dumpdir__):
             if(_basename in file):
@@ -63,7 +64,7 @@ class FormExtractor():
             match_rates[file] = image_similarity(img_arr, template_arr)
         return max(match_rates, key = lambda x: match_rates[x])
 
-    def match(self, mode='lazy', thresh=0.70):
+    def match(self, mode='best', thresh=0.70):
         #From the converted list of files, find the images most similar to the tempate
         assert mode in self.match.modes, 'Invalid search mode ({}). Valid mode choices: {}'.format(mode,__search__.modes)
         return self.match.modes[mode].__call__(self) if 'best' else self.match.modes[mode].__call__(self, thresh=thresh)
@@ -75,7 +76,8 @@ class FormExtractor():
 
 class FormReader():
 
-    def __init__(self, templatefile, filename, boxmap, extract_path = None, extact_filename = None, pdf_page = None, noisefilter_fn = None):
+    def __init__(self, templatefile, filename, boxmap,
+                 extract_path = None, extact_filename = None, pdf_page = None, noisefilter_fn = None):
         self.templatefile = templatefile
         self.filename = filename
         self.data = {}
@@ -84,6 +86,9 @@ class FormReader():
         self.__extract_path__ = extract_path or '{}{}'.format(rem_filetype(self.filename), '_img-dump')
         self.__formextract_files__ = {}
         self.__noisefilter_fn__ = noisefilter_fn or remove_nonchar_noise
+
+        assert isinstance(pdf_page,int) or not pdf_page
+        self.__pages__ = [pdf_page]
         
     def __splitfields__(self):
         split_bybox(self.filename, self.__extract_path__, boxs=self.__boxmap__.values(),
@@ -117,7 +122,7 @@ class FormReader():
     def __enter__(self):
 
         if(self.filename[-4:] == '.pdf'):
-            with FormExtractor(self.templatefile, self.filename) as fe:
+            with FormExtractor(self.templatefile, self.filename, pages=self.__pages__) as fe:
                 self.filename = fe.match()
         
         self.__splitfields__()
@@ -137,4 +142,5 @@ class FormReader():
             try: os.remove(os.path.join(self.__extract_path__, file))
             except FileNotFoundError: pass
         os.rmdir(self.__extract_path__)
+
 
